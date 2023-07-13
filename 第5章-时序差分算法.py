@@ -61,7 +61,8 @@ class Sarsa:
         return a
 
     def update(self, s0, a0, r, s1, a1):
-        td_error = r + self.gamma * self.Q_table[s1, a1] - self.Q_table[s0, a0]
+        td_target = r + self.gamma * self.Q_table[s1, a1]
+        td_error = td_target - self.Q_table[s0, a0]
         self.Q_table[s0, a0] += self.alpha * td_error
 
 

@@ -80,6 +80,8 @@ class ActorCritic:
         td_target = rewards + self.gamma * self.critic(next_states) * (1 -
                                                                        dones)
         td_delta = td_target - self.critic(states)  # 时序差分误差
+        
+        # 计算策略梯度
         log_probs = torch.log(self.actor(states).gather(1, actions))
         actor_loss = torch.mean(-log_probs * td_delta.detach())
         # 均方误差损失函数

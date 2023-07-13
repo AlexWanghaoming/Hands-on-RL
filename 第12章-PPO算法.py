@@ -68,7 +68,7 @@ class PPO:
                              dtype=torch.float).view(-1, 1).to(self.device)
         td_target = rewards + self.gamma * self.critic(next_states) * (1 -
                                                                        dones)
-        td_delta = td_target - self.critic(states)
+        td_delta = td_target - self.critic(states)  # 计算TD误差
         advantage = rl_utils.compute_advantage(self.gamma, self.lmbda,
                                                td_delta.cpu()).to(self.device)
         old_log_probs = torch.log(self.actor(states).gather(1,

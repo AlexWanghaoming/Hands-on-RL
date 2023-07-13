@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
 
 def compute_advantage(gamma, lmbda, td_delta):
     td_delta = td_delta.detach().numpy()
@@ -15,7 +13,6 @@ def compute_advantage(gamma, lmbda, td_delta):
     return torch.tensor(advantage_list, dtype=torch.float)
 
 
-# In[2]:
 
 
 import torch
@@ -75,7 +72,7 @@ class TRPO:
         return action.item()
 
     def hessian_matrix_vector_product(self, states, old_action_dists, vector):
-        # 计算黑塞矩阵和一个向量的乘积
+        # 计算hessian矩阵和一个向量的乘积  HVP
         new_action_dists = torch.distributions.Categorical(self.actor(states))
         kl = torch.mean(
             torch.distributions.kl.kl_divergence(old_action_dists,
@@ -93,7 +90,7 @@ class TRPO:
 
     def conjugate_gradient(self, grad, states, old_action_dists):  # 共轭梯度法求解方程
         x = torch.zeros_like(grad)
-        r = grad.clone()
+        r = grad.clone()  # 梯度r   系统残差
         p = grad.clone()
         rdotr = torch.dot(r, r)
         for i in range(10):  # 共轭梯度主循环
@@ -105,8 +102,8 @@ class TRPO:
             new_rdotr = torch.dot(r, r)
             if new_rdotr < 1e-10:
                 break
-            beta = new_rdotr / rdotr
-            p = r + beta * p
+            beta = new_rdotr / rdotr  #
+            p = r + beta * p  # 更新共轭向量
             rdotr = new_rdotr
         return x
 
@@ -143,21 +140,24 @@ class TRPO:
                      advantage):  # 更新策略函数
         surrogate_obj = self.compute_surrogate_obj(states, actions, advantage,
                                                    old_log_probs, self.actor)
-        grads = torch.autograd.grad(surrogate_obj, self.actor.parameters())
+        grads = torch.autograd.grad(surrogate_obj, self.actor.parameters())  # 计算原来目标函数关于策略网络的梯度
         obj_grad = torch.cat([grad.view(-1) for grad in grads]).detach()
-        # 用共轭梯度法计算x = H^(-1)g
+        
+        # 用共轭梯度法计算x = H^(-1)g   x是优化方向
         descent_direction = self.conjugate_gradient(obj_grad, states,
-                                                    old_action_dists)
+                                                    old_action_dists)     # 考虑 新旧策略kl散度这一约束
 
         Hd = self.hessian_matrix_vector_product(states, old_action_dists,
                                                 descent_direction)
+        
         max_coef = torch.sqrt(2 * self.kl_constraint /
                               (torch.dot(descent_direction, Hd) + 1e-8))
         new_para = self.line_search(states, actions, advantage, old_log_probs,
                                     old_action_dists,
-                                    descent_direction * max_coef)  # 线性搜索
+                                    descent_direction * max_coef)  # 线性搜索确定本轮迭代后的网络参数
         torch.nn.utils.convert_parameters.vector_to_parameters(
             new_para, self.actor.parameters())  # 用线性搜索后的参数更新策略
+
 
     def update(self, transition_dict):
         states = torch.tensor(transition_dict['states'],
@@ -170,11 +170,11 @@ class TRPO:
                                    dtype=torch.float).to(self.device)
         dones = torch.tensor(transition_dict['dones'],
                              dtype=torch.float).view(-1, 1).to(self.device)
+        
         td_target = rewards + self.gamma * self.critic(next_states) * (1 -
                                                                        dones)
         td_delta = td_target - self.critic(states)
-        advantage = compute_advantage(self.gamma, self.lmbda,
-                                      td_delta.cpu()).to(self.device)
+        
         old_log_probs = torch.log(self.actor(states).gather(1,
                                                             actions)).detach()
         old_action_dists = torch.distributions.Categorical(
@@ -184,15 +184,16 @@ class TRPO:
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()  # 更新价值函数
+        
         # 更新策略函数
+        advantage = compute_advantage(self.gamma, self.lmbda,
+                                      td_delta.cpu()).to(self.device)
         self.policy_learn(states, actions, old_action_dists, old_log_probs,
                           advantage)
 
 
-# In[5]:
 
-
-num_episodes = 500
+num_episodes = 100
 hidden_dim = 128
 gamma = 0.98
 lmbda = 0.95
@@ -208,6 +209,7 @@ env.seed(0)
 torch.manual_seed(0)
 agent = TRPO(hidden_dim, env.observation_space, env.action_space, lmbda,
              kl_constraint, alpha, critic_lr, gamma, device)
+
 return_list = rl_utils.train_on_policy_agent(env, agent, num_episodes)
 
 episodes_list = list(range(len(return_list)))
@@ -223,7 +225,7 @@ plt.xlabel('Episodes')
 plt.ylabel('Returns')
 plt.title('TRPO on {}'.format(env_name))
 plt.show()
-
+exit()
 # Iteration 0: 100%|██████████| 50/50 [00:02<00:00, 16.85it/s, episode=50,
 # return=139.200]
 # Iteration 1: 100%|██████████| 50/50 [00:03<00:00, 16.55it/s, episode=100,
